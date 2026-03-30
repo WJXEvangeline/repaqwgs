@@ -48,6 +48,8 @@ using namespace std;
 #define BIT_HAS_NO_LINE_BREAK_AT_END (1<<10)
 // if set, the encoded stream R2 has line break in the file end
 #define BIT_HAS_NO_LINE_BREAK_AT_END_R2 (1<<11)
+// if set, reads in this chunk have been sorted by sequence content
+#define BIT_READS_SORTED (1<<12)
 
 class RfqChunk{
 public:
