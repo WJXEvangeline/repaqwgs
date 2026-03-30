@@ -4,6 +4,34 @@
 #include "writer.h"
 #include <stdio.h>
 #include <sstream>
+#include <algorithm>
+
+// Comparator for sorting reads by sequence content (lexicographic)
+static bool compareReadsBySeq(Read* a, Read* b) {
+    return a->mSeq.mStr < b->mSeq.mStr;
+}
+
+// Comparator for sorting read pairs by left read sequence
+static bool comparePairsBySeq(ReadPair* a, ReadPair* b) {
+    return a->mLeft->mSeq.mStr < b->mLeft->mSeq.mStr;
+}
+
+// Illumina 8-bin quality binning scheme (Phred+33 offset)
+static void applyQualityBinning(Read* read) {
+    for(size_t i = 0; i < read->mQuality.length(); i++) {
+        int q = read->mQuality[i] - 33;  // convert to Phred score
+        int binned;
+        if(q <= 1)       binned = 0;
+        else if(q <= 9)  binned = 6;
+        else if(q <= 19) binned = 15;
+        else if(q <= 24) binned = 22;
+        else if(q <= 29) binned = 27;
+        else if(q <= 34) binned = 33;
+        else if(q <= 39) binned = 37;
+        else             binned = 40;
+        read->mQuality[i] = (char)(binned + 33);  // convert back to ASCII
+    }
+}
 
 Repaq::Repaq(Options* opt){
     mOptions = opt;
@@ -550,6 +578,10 @@ void Repaq::compress(){
         }
         reads.push_back(read);
         totalBses += read->length();
+        // Apply lossy quality binning
+        if(mOptions->lossyQual) {
+            applyQualityBinning(read);
+        }
         if(totalBses >= mOptions->chunkSize) {
             if(header == NULL) {
                 header = codec.makeHeader(reads);
@@ -566,6 +598,15 @@ void Repaq::compress(){
             }
             if(header == NULL)
                 error_exit("failed to encode, please confirm the input FASTQ file is valid and not empty");
+            // Sort reads within chunk for better compression
+            if(mOptions->sortReads) {
+                std::sort(reads.begin(), reads.end(), compareReadsBySeq);
+                if(mOptions->completeCheck || mOptions->fastCheck) {
+                    cerr << "WARNING: --sort_reads is incompatible with --verify/--fast_verify. Disabling verification." << endl;
+                    mOptions->completeCheck = false;
+                    mOptions->fastCheck = false;
+                }
+            }
             RfqChunk* chunk = codec.encodeChunk(reads);
             if(chunk) {
                 if(reader.hasNoLineBreakAtEnd())
@@ -603,6 +644,10 @@ void Repaq::compress(){
         }
         if(header == NULL)
             error_exit("failed to encode, please confirm the input FASTQ file is valid and not empty");
+        // Sort reads within chunk for better compression
+        if(mOptions->sortReads) {
+            std::sort(reads.begin(), reads.end(), compareReadsBySeq);
+        }
         RfqChunk* chunk = codec.encodeChunk(reads);
         if(chunk) {
             if(reader.hasNoLineBreakAtEnd())
@@ -660,6 +705,11 @@ void Repaq::compressPE(){
         }
         reads.push_back(read);
         totalBses += read->mLeft->length() + read->mRight->length();
+        // Apply lossy quality binning for PE
+        if(mOptions->lossyQual) {
+            applyQualityBinning(read->mLeft);
+            applyQualityBinning(read->mRight);
+        }
         if(totalBses >= mOptions->chunkSize) {
             if(header == NULL) {
                 header = codec.makeHeader(reads);
@@ -678,6 +728,15 @@ void Repaq::compressPE(){
             }
             if(header == NULL)
                 error_exit("failed to encode, please confirm the input FASTQ file is valid and not empty");
+            // Sort read pairs within chunk for better compression
+            if(mOptions->sortReads) {
+                std::sort(reads.begin(), reads.end(), comparePairsBySeq);
+                if(mOptions->completeCheck || mOptions->fastCheck) {
+                    cerr << "WARNING: --sort_reads is incompatible with --verify/--fast_verify. Disabling verification." << endl;
+                    mOptions->completeCheck = false;
+                    mOptions->fastCheck = false;
+                }
+            }
             RfqChunk* chunk = codec.encodeChunk(reads);
             if(chunk) {
                 bool noLineBreakAtEnd = reader.mLeft->hasNoLineBreakAtEnd();
@@ -725,6 +784,10 @@ void Repaq::compressPE(){
         }
         if(header == NULL)
             error_exit("failed to encode, please confirm the input FASTQ file is valid and not empty");
+        // Sort read pairs within chunk for better compression
+        if(mOptions->sortReads) {
+            std::sort(reads.begin(), reads.end(), comparePairsBySeq);
+        }
         RfqChunk* chunk = codec.encodeChunk(reads);
         if(chunk) {
             bool noLineBreakAtEnd = reader.mLeft->hasNoLineBreakAtEnd();
