@@ -43,6 +43,10 @@ int main(int argc, char* argv[]){
     cmd.add("compare", 'p', "compare the files read by read to check the compression consistency. <rfq_to_compare> should be specified in this mode.");
     cmd.add<string>("rfq_to_compare", 'r', "the RFQ file to be compared with the input. This option is only used in compare mode.", false, "");
     cmd.add<string>("json_compare_result", 'j', "the file to store the comparison result. This is optional since the result is also printed on STDOUT.", false, "");
+    // WGS optimization options
+    cmd.add("wgs", 'w', "WGS optimization mode: use larger chunk (10MB) and higher xz compression for whole genome sequencing data.");
+    cmd.add("sort_reads", 's', "Sort reads within each chunk by sequence content for better compression. Note: changes read order in output.");
+    cmd.add("lossy_qual", 'L', "Enable lossy quality binning (Illumina 8-bin scheme) for much better compression. WARNING: quality values will be modified.");
     // threading
     cmd.add<int>("thread", 't', "thread number for xz compression (default 1). When compression level (-z) is >= 4, no threading will be used.", false, 1);
     // compression level
@@ -76,6 +80,22 @@ int main(int argc, char* argv[]){
     compression = max(1, min(9, compression));
     opt.completeCheck = cmd.exist("verify");
     opt.fastCheck = cmd.exist("fast_verify");
+    opt.wgsMode = cmd.exist("wgs");
+    opt.sortReads = cmd.exist("sort_reads");
+    opt.lossyQual = cmd.exist("lossy_qual");
+
+    // Apply WGS presets: larger chunk, higher compression, sorting
+    if(opt.wgsMode) {
+        if(!cmd.exist("chunk"))
+            opt.chunkSize = 10000 * 1000;  // 10MB default for WGS
+        if(!cmd.exist("compression"))
+            compression = 5;  // higher default compression for WGS
+        if(!cmd.exist("sort_reads"))
+            opt.sortReads = true;  // WGS mode enables sorting by default
+        cerr << "WGS mode enabled: chunk=" << opt.chunkSize/1000 << "KB, compression=" << compression
+             << ", sort_reads=" << (opt.sortReads ? "on" : "off")
+             << ", lossy_qual=" << (opt.lossyQual ? "on" : "off") << endl;
+    }
 
     int modeNum = 0;
     if(cmd.exist("compress"))
