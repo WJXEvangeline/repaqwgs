@@ -17,6 +17,9 @@ Options::Options(){
     interleavedInput = false;
     completeCheck = false;
     fastCheck = false;
+    wgsMode = false;
+    sortReads = false;
+    lossyQual = false;
 }
 
 bool Options::isFastqFile(string filename) {
