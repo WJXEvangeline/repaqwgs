@@ -36,6 +36,13 @@ public:
     // chunk
     int chunkSize;
     int mode;
+    // WGS optimization mode
+    bool wgsMode;
+    // Sort reads within each chunk for better compression
+    bool sortReads;
+    // Lossy quality binning for better compression (reduces quality precision)
+    bool lossyQual;
+
 
     // for double check
     bool completeCheck;
